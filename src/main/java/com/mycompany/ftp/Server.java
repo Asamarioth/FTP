@@ -3,6 +3,8 @@ package com.mycompany.ftp;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 class Server {
 
@@ -16,12 +18,6 @@ class Server {
             System.out.println("Serwer wystartował " + server.getLocalSocketAddress());
             while (true) {
                 Socket client = server.accept();
-
-                System.out.println("Połączono nowego klienta "
-                        + numer + " "
-                        + client.getInetAddress()
-                                .getHostAddress());
-                numer++;
                 ClientHandler clientSock
                         = new ClientHandler(client);
                 new Thread(clientSock).start();
@@ -52,6 +48,8 @@ class Server {
             BufferedReader in = null;
             DataOutputStream dos = null;
             FileInputStream fis = null;
+            DataInputStream dis = null;
+            FileOutputStream fos = null;
             try {
                 out = new PrintWriter(
                         clientSocket.getOutputStream(), true);
@@ -69,10 +67,8 @@ class Server {
                     switch (line) {
                         case "dir":
                             File curDir = new File(".");
-                            System.out.println(curDir);
                             List<String> dir = getAllFiles(curDir);
                             out.flush();
-                            System.out.println(dir);
                             out.println(dir);
                             break;
                         case "dl":
@@ -103,16 +99,48 @@ class Server {
                             dos = new DataOutputStream(clientSocket.getOutputStream());
                             fis = new FileInputStream(fileToSend);
                             byte[] buffer = new byte[4096];
-                            while (fis.read(buffer) > 0) {
-                                dos.write(buffer);
+                             {
+                                try {
+                                    Thread.sleep(1000);
+                                } catch (InterruptedException ex) {
+                                    Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+                                }
                             }
-                            out.flush();
+                            while (fis.read(buffer) > 0) {
+                                    dos.write(buffer);
+      
+
+ 
+                            }
+                            //out.flush();
+                            fis.close();
                             System.out.println("Ukończono wysyłanie");
 
                             break;
 
-                        case "st":
+                        case "rec":
                             //otrzymywanie pliku od klienta
+                            dis = new DataInputStream(clientSocket.getInputStream());
+                            String fileNameRec = in.readLine();
+                            System.out.println("Otrzymano nowy plik: " + fileNameRec);
+                            fos = new FileOutputStream(fileNameRec);
+                            byte[] bufferRec = new byte[4096];
+                            long filesize = Integer.valueOf(in.readLine());
+                            System.out.println(filesize);
+                            int read = 0;
+                            int totalRead = 0;
+                            long remaining = filesize;
+                            while ((read = dis.read(bufferRec)) > 0) {
+                                totalRead += read;
+                                remaining -= read;
+                                fos.write(bufferRec, 0, read);
+
+                                if (totalRead >= filesize) {
+                                    break;
+                                }
+                            }
+                            System.out.println("Pobrano plik");
+                            fos.close();
                             break;
                         default:
                             System.out.println("Nierozpoznana komenda");
@@ -132,6 +160,9 @@ class Server {
                     }
                     if (fis != null) {
                         fis.close();
+                    }
+                    if (dis != null) {
+                        dis.close();
                     }
                     if (in != null) {
                         in.close();

@@ -3,6 +3,8 @@ package com.mycompany.ftp;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 class Client {
 
@@ -26,12 +28,15 @@ class Client {
                                 socket.getInputStream()));
                 DataInputStream dis = null;
                 FileOutputStream fos = null;
+                DataOutputStream dos = null;
+                FileInputStream fis = null;
                 //Pętla menu
                 while (true) {
                     System.out.println("1.Wypisz zawartość serwera\n"
                             + "2.Wypisz zawartość klienta\n"
                             + "3.Pobierz plik\n"
-                            + "4.Zakończ program");
+                            + "4.Wyślij plik\n"
+                            + "5.Zakończ program");
                     command = scanner.next();
                     switch (command) {
                         case "1":
@@ -57,7 +62,7 @@ class Client {
                             out.flush();
                             while (true) {
                                 System.out.println("Podaj nazwę pliku: ");
-                                fileName= scanner.nextLine();
+                                fileName = scanner.next();
                                 out.println(fileName);
 
                                 if (in.readLine().equals("fnf")) {
@@ -69,24 +74,80 @@ class Client {
                             dis = new DataInputStream(socket.getInputStream());
                             fos = new FileOutputStream(fileName);
                             byte[] buffer = new byte[4096];
-                            int filesize = Integer.valueOf(in.readLine()); // Send file size in separate msg
+                            long filesize = Long.valueOf(in.readLine()); // Send file size in separate msg
                             int read = 0;
                             int totalRead = 0;
-                            int remaining = filesize;
-                            while ((read = dis.read(buffer, 0, Math.min(buffer.length, remaining))) > 0) {
+                            long remaining = filesize;
+                            int progressHelper = 0;
+                            double percentage = 0.0;
+                            System.out.println("Rozpoczynam pobieranie");
+                            while ((read = dis.read(buffer)) > 0) {
                                 totalRead += read;
                                 remaining -= read;
-                                System.out.println("read " + totalRead + " bytes.");
+                                if (progressHelper % 250 == 0) {
+
+                                    percentage = (float) totalRead / (float) filesize;
+                                    System.out.printf("Pobrano: %3.2f%%%n", percentage * 100);
+                                }
                                 fos.write(buffer, 0, read);
+                                progressHelper++;
+                                if (totalRead >= filesize) {
+                                    break;
+                                }
                             }
                             System.out.println("Pobrano plik");
-                            
+                            fos.close();
+                            System.out.println("--Wpisz dowolny znak aby kontynuować...--");
+                            scanner.next();
                             break;
                         case "4":
-                            scanner.close();
-                            if (fos != null) {
-                                fos.close();
+                            out.println("rec");
+                            Boolean filePresent;
+                            String fileNameSend;
+                            while (true) {
+                                System.out.println("Podaj nazwę pliku: ");
+                                fileNameSend = scanner.next();
+                                File curentDir = new File(".");
+                                filePresent = false;
+                                File[] filesList = curentDir.listFiles();
+                                for (File temp : filesList) {
+                                    if (temp.getName().equals(fileNameSend)) {
+                                        filePresent = true;
+                                        break;
+                                    }
+                                }
+                                if (!filePresent) {
+                                    continue;
+                                } else {
+                                    break;
+                                }
                             }
+                            out.println(fileNameSend);
+                            System.out.println("Wysyłanie pliku");
+                            File fileToSend = new File(fileNameSend);
+                            out.println(fileToSend.length());
+                            dos = new DataOutputStream(socket.getOutputStream());
+                            fis = new FileInputStream(fileToSend);
+                            byte[] bufferSend = new byte[4096];
+
+                             {
+                                try {
+                                    Thread.sleep(1000);
+                                } catch (InterruptedException ex) {
+                                    Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+                                }
+                            }
+
+                            while (fis.read(bufferSend) > 0) {
+                                dos.write(bufferSend);
+                            }
+                            //out.flush();
+                            fis.close();
+                            System.out.println("Ukończono wysyłanie");
+                            break;
+
+                        case "5":
+                            scanner.close();
                             if (dis != null) {
                                 dis.close();
                             }
@@ -95,6 +156,9 @@ class Client {
                             }
                             if (in != null) {
                                 in.close();
+                            }
+                            if (dos != null) {
+                                dos.close();
                             }
                             socket.close();
                             System.exit(0);
